@@ -1,0 +1,128 @@
+{
+  "name": "@lumencharts/trading-platform",
+  "version": "0.1.0",
+  "description": "Trading platform for Lumen Charts: broker contracts, trading sessions, order ticket, account manager and depth UI, with a simulated broker and a paper broker.",
+  "license": "Apache-2.0",
+  "homepage": "https://docs.lumencharts.com/charting-library/trading",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumenchartshq/trading-platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lumenchartshq/trading-platform/issues"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts/index.ts",
+    "./contracts/broker": "./src/contracts/broker.ts",
+    "./contracts/market-data": "./src/contracts/market-data.ts",
+    "./contracts/ports": "./src/contracts/ports.ts",
+    "./mock": "./src/mock/index.ts",
+    "./paper": "./src/paper/index.ts",
+    "./market-data": "./src/market-data/index.ts",
+    "./conformance": "./src/conformance/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./ui/style.css": "./src/ui/trading.css",
+    "./ui/resize-handle": "./src/ui/resize-handle.tsx",
+    "./ui/resize-handle.css": "./src/ui/resize-handle.css",
+    "./asset": "./src/asset.ts"
+  },
+  "types": "./src/index.ts",
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./contracts": {
+        "types": "./dist/contracts/index.d.ts",
+        "import": "./dist/contracts/index.js",
+        "default": "./dist/contracts/index.js"
+      },
+      "./contracts/broker": {
+        "types": "./dist/contracts/broker.d.ts",
+        "import": "./dist/contracts/broker.js",
+        "default": "./dist/contracts/broker.js"
+      },
+      "./contracts/market-data": {
+        "types": "./dist/contracts/market-data.d.ts",
+        "import": "./dist/contracts/market-data.js",
+        "default": "./dist/contracts/market-data.js"
+      },
+      "./contracts/ports": {
+        "types": "./dist/contracts/ports.d.ts",
+        "import": "./dist/contracts/ports.js",
+        "default": "./dist/contracts/ports.js"
+      },
+      "./mock": {
+        "types": "./dist/mock/index.d.ts",
+        "import": "./dist/mock/index.js",
+        "default": "./dist/mock/index.js"
+      },
+      "./paper": {
+        "types": "./dist/paper/index.d.ts",
+        "import": "./dist/paper/index.js",
+        "default": "./dist/paper/index.js"
+      },
+      "./market-data": {
+        "types": "./dist/market-data/index.d.ts",
+        "import": "./dist/market-data/index.js",
+        "default": "./dist/market-data/index.js"
+      },
+      "./conformance": {
+        "types": "./dist/conformance/index.d.ts",
+        "import": "./dist/conformance/index.js",
+        "default": "./dist/conformance/index.js"
+      },
+      "./ui": {
+        "types": "./dist/ui/index.d.ts",
+        "import": "./dist/ui/index.js",
+        "default": "./dist/ui/index.js"
+      },
+      "./ui/style.css": "./dist/ui/trading.css",
+      "./ui/resize-handle": {
+        "types": "./dist/ui/resize-handle.d.ts",
+        "import": "./dist/ui/resize-handle.js",
+        "default": "./dist/ui/resize-handle.js"
+      },
+      "./ui/resize-handle.css": "./dist/ui/resize-handle.css",
+      "./asset": {
+        "types": "./dist/asset.d.ts",
+        "import": "./dist/asset.js",
+        "default": "./dist/asset.js"
+      }
+    },
+    "types": "./dist/index.d.ts"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.14",
+    "@kobalte/core": "^0.13.12",
+    "@tanstack/solid-virtual": "^3.13.36"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc --noEmit",
+    "pretest": "node test/boundaries.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:orderings": "TRADING_UPDATE_ORDERING=after node --test test/*.test.mjs && TRADING_UPDATE_ORDERING=split node --test test/*.test.mjs",
+    "check:boundaries": "node test/boundaries.mjs",
+    "bench:active": "node scripts/bench-active-trading.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "esbuild": "^0.28.1",
+    "esbuild-plugin-solid": "^0.6.0",
+    "jsdom": "^29.1.1"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

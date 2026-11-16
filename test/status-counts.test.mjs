@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { loadModule } from './load-module.mjs';
+const { createStatusCounts } = await loadModule('src/ui/account-manager/status-counts.ts');
+const { EntityStore } = await loadModule('src/core/entity-store.ts');
+test('U06/X09: status tab counts follow adds, transitions and removals while reading only changed rows', () => {
+  const store = new EntityStore(() => {});
+  for (let index = 0; index < 1000; index++) store.upsert({ id: `o${index}`, status: index % 2 ? 6 : 2 });
+  let reads = 0;
+  const reader = { ids: () => store.ids(), get: (id) => { reads++; return store.get(id); }, revision: (id) => store.revision(id), subscribeChanges: (listener) => store.subscribeChanges(listener) };
+  let latest;
+  const release = createStatusCounts(reader, (counts, total) => { latest = { counts, total }; });
+  assert.equal(latest.total, 1000); assert.equal(latest.counts.get(6), 500); assert.equal(latest.counts.get(2), 500);
+  reads = 0;
+  store.upsert({ id: 'o1', status: 2 });
+  assert.equal(reads, 1, 'a transition reads only its own row');
+  assert.equal(latest.counts.get(6), 499); assert.equal(latest.counts.get(2), 501);
+  store.upsert({ id: 'new', status: 5 }); store.remove('o0');
+  assert.equal(latest.total, 1000); assert.equal(latest.counts.get(5), 1); assert.equal(latest.counts.get(2), 500);
+  release();
+  store.upsert({ id: 'after', status: 6 });
+  assert.equal(latest.total, 1000, 'released counters stop listening');
+});

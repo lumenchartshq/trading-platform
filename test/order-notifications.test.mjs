@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { loadModule } from './load-module.mjs';
+const { watchOrderNotifications } = await loadModule('src/core/order-notifications.ts');
+const { EntityStore } = await loadModule('src/core/entity-store.ts');
+const order = (status, extra = {}) => ({ id: 'O', symbol: 'SIM:X', side: 1, type: 1, qty: 2, limitPrice: 99, status, ...extra });
+test('U09: order notifications follow broker transitions only while live and include customNotificationFields changes', () => {
+  const store = new EntityStore(() => {}), seen = []; let live = false;
+  store.upsert(order(6));
+  const release = watchOrderNotifications(store, () => live, ['additionalType'], (item) => seen.push(item));
+  store.upsert(order(2)); assert.deepEqual(seen, [], 'snapshots and refreshes before live never notify');
+  live = true;
+  store.upsert({ ...order(6), id: 'N' });
+  store.upsert({ ...order(6), id: 'N', extra: { additionalType: 'oco' } });
+  store.upsert({ ...order(6), id: 'N', extra: { additionalType: 'oco' }, limitPrice: 98.5 });
+  store.upsert({ ...order(2), id: 'N', extra: { additionalType: 'oco' }, limitPrice: 98.5, avgPrice: 97.75, filledQty: 2 });
+  store.upsert({ ...order(5), id: 'R', message: { type: 'error', text: 'Insufficient margin' } });
+  assert.deepEqual(seen.map((item) => item.title), ['Limit order placed', 'Limit order modified', 'Limit order modified', 'Limit order executed', 'Limit order rejected']);
+  assert.equal(seen[0].text, 'Buy 2 at 99.00');
+  assert.equal(seen[2].text, 'Buy 2 at 98.50');
+  assert.equal(seen[3].text, 'Buy 2 at 97.75');
+  assert.equal(seen[4].text, 'Insufficient margin'); assert.equal(seen[4].type, 0);
+  release(); store.upsert({ ...order(1), id: 'N' }); assert.equal(seen.length, 5);
+});

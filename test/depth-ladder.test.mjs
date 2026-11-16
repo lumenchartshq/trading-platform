@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { loadModule } from './load-module.mjs';
+const { createDepthLadder, formatDepthVolume } = await loadModule('src/ui/dom/ladder.ts');
+test('D02/D04: fixed ladder updates only changed visible rows and preserves keyed readers', () => {
+  const ladder = createDepthLadder(0.01, 31);
+  ladder.lastPrice(10);
+  const keys = ladder.viewport.get(), original = ladder.row(1000);
+  let notifications = 0, viewportChanges = 0;
+  const releases = keys.map(key => ladder.row(key).subscribe(() => notifications++));
+  const releaseViewport = ladder.viewport.subscribe(() => viewportChanges++);
+  ladder.apply({ snapshot: true, bids: [{ price: 10, volume: 5 }], asks: [{ price: 10.01, volume: 7 }] });
+  assert.equal(notifications, 2);
+  notifications = 0;
+  ladder.apply({ snapshot: false, bids: [{ price: 10, volume: 6 }, { price: 1000, volume: 30 }], asks: [] });
+  assert.equal(notifications, 1); assert.equal(viewportChanges, 0); assert.equal(ladder.viewport.get(), keys);
+  assert.equal(original.get().bid, 6);
+  ladder.apply({ snapshot: false, bids: [{ price: 10, volume: 0 }], asks: [] });
+  assert.equal(original.get().bid, 0);
+  releases.forEach(release => release()); releaseViewport(); ladder.destroy();
+});
+test('D02/D03: active pointer or keyboard action freezes its row until release', () => {
+  const ladder = createDepthLadder(0.25, 5);
+  ladder.lastPrice(10);
+  const keys = ladder.viewport.get(), action = ladder.beginAction(40);
+  ladder.lastPrice(20);
+  assert.equal(ladder.viewport.get(), keys); assert.equal(action.price, 10);
+  assert.equal(ladder.recenter(), false);
+  action.release(); action.release();
+  assert.notEqual(ladder.viewport.get(), keys); assert.equal(ladder.row(80).get().price, 20);
+  ladder.destroy();
+});
+test('D02: static mode requires explicit recenter and formats raw versus compact volume', () => {
+  const ladder = createDepthLadder(1, 5, true); ladder.lastPrice(10);
+  const keys = ladder.viewport.get(); ladder.lastPrice(100);
+  assert.equal(ladder.viewport.get(), keys); assert(ladder.recenter()); assert.equal(ladder.row(100).get().price, 100);
+  assert.equal(formatDepthVolume(12345, false), '12.345K');
+  assert.equal(formatDepthVolume(12345, true), '12,345'); ladder.destroy();
+});
+test('D01/D02: depth validation is atomic and own annotations move by key', () => {
+  const ladder = createDepthLadder(1, 5); ladder.lastPrice(10);
+  ladder.apply({ snapshot: true, bids: [{ price: 10, volume: 5 }], asks: [] });
+  assert.throws(() => ladder.apply({ snapshot: true, bids: [{ price: 10, volume: 9 }], asks: [{ price: 11, volume: -1 }] }));
+  assert.equal(ladder.row(10).get().bid, 5);
+  ladder.order('A', 1, 10, 2); ladder.order('B', 1, 10, 3);
+  assert.equal(ladder.row(10).get().buyQuantity, 5);
+  ladder.order('A', 1, 11, 2);
+  assert.equal(ladder.row(10).get().buyQuantity, 3); assert.equal(ladder.row(11).get().buyQuantity, 2);
+  ladder.order('A', 1, 11, 0); assert.equal(ladder.row(11).get().buyQuantity, 0);
+  assert.throws(() => createDepthLadder(0)); assert.throws(() => createDepthLadder(1, 1000));
+  ladder.destroy();
+});

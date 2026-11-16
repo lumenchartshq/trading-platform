@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { loadModule } from './load-module.mjs';
+const { quantityInputValue, quantityFromInput, quantityModeAvailable } = await loadModule('src/core/quantity-input.ts');
+const stock = { type: 'stock', currency: 'USD', qty: { min: 1, max: 100, step: 1 } };
+const context = { instrument: stock, price: 100, equity: 10000, accountCurrency: 'USD' };
+test('P03/P04: cash and equity percentage convert to bounded canonical units without currency guessing', () => {
+  assert.equal(quantityInputValue(2, 'currency', context), 200);
+  assert.equal(quantityInputValue(2, 'percentage', context), 2);
+  assert.equal(quantityFromInput(250, 'currency', context), 2);
+  assert.equal(quantityFromInput(2.5, 'percentage', context), 2);
+  assert.equal(quantityFromInput(200, 'currency', { ...context, price: 101 }), 1);
+  assert.equal(quantityFromInput(200, 'currency', { ...context, price: -100 }), 2);
+  assert.equal(quantityFromInput(10001, 'currency', context), 100);
+  assert.equal(quantityFromInput(10100, 'currency', context), undefined);
+  assert.equal(quantityFromInput(99, 'currency', context), undefined);
+  for (const price of [undefined, 0, NaN, Infinity]) assert.equal(quantityFromInput(200, 'currency', { ...context, price }), undefined);
+  for (const equity of [undefined, 0, NaN, Infinity]) assert.equal(quantityModeAvailable('percentage', { ...context, equity }), false);
+  assert.equal(quantityInputValue(2, 'percentage', { ...context, accountCurrency: 'EUR' }), undefined);
+  assert.equal(quantityModeAvailable('currency', { ...context, accountCurrency: 'EUR' }), true);
+  assert.equal(quantityModeAvailable('currency', { ...context, instrument: { ...stock, currency: undefined } }), false);
+});
+test('P03/P04: currency sizing respects contract point value, magnifier, lot fallback and fractional quantity steps', () => {
+  const contract = { ...context, price: 200, instrument: { ...stock, type: 'futures', bigPointValue: 50, priceMagnifier: 100, qty: { min: .01, max: 100, step: .01 } } };
+  assert.equal(quantityInputValue(2.5, 'currency', contract), 250);
+  assert.equal(quantityFromInput(255.9, 'currency', contract), 2.55);
+  const fx = { ...context, price: 1.25, instrument: { ...stock, type: 'forex', lotSize: 100000, qty: { min: .01, max: 100, step: .01 } } };
+  assert.equal(quantityFromInput(2500, 'currency', fx), .02);
+  assert.equal(quantityFromInput(2500, 'currency', { ...fx, instrument: { ...fx.instrument, lotSize: undefined } }), undefined);
+});
+
+test('P03: paired risk modes use account pip values, retain budgets and distinguish equity from instrument notional', () => {
+  const risk = { ...context, side: 1, stop: 99, riskAllowed: true, instrument: { ...stock, pipSize: .01, pipValue: 1 } };
+  assert.equal(quantityInputValue(2, 'riskMoney', risk), 200);
+  assert.equal(quantityInputValue(2, 'riskPercentage', risk), 2);
+  assert.equal(quantityFromInput(450, 'riskMoney', risk), 4);
+  assert.equal(quantityFromInput(4.5, 'riskPercentage', risk), 4);
+  assert.equal(quantityFromInput(450, 'riskMoney', { ...risk, stop: 98 }), 2);
+  assert.equal(quantityFromInput(450, 'riskMoney', { ...risk, stop: 98, pipValues: { buyPipValue: 2, sellPipValue: 3 } }), 1);
+  assert.equal(quantityFromInput(450, 'riskMoney', { ...risk, side: -1, pipValues: { buyPipValue: 1, sellPipValue: 2 } }), 2);
+  assert.equal(quantityFromInput(450, 'riskMoney', { ...risk, price: 0, stop: -1 }), 4);
+  assert.equal(quantityFromInput(450, 'riskMoney', { ...risk, instrument: { ...risk.instrument, currency: 'GBP' } }), 4);
+  assert.equal(quantityFromInput(4.5, 'riskPercentage', { ...risk, instrument: { ...risk.instrument, currency: 'GBP' } }), 4);
+  assert.equal(quantityFromInput(4.5, 'percentage', { ...risk, instrument: { ...risk.instrument, currency: 'GBP' } }), undefined);
+  for (const change of [{ riskAllowed: false }, { stop: undefined }, { stop: 100 }, { accountCurrency: undefined }, { side: undefined }, { pipValues: { buyPipValue: 0, sellPipValue: 0 } }]) assert.equal(quantityModeAvailable('riskMoney', { ...risk, ...change }), false);
+  assert.equal(quantityModeAvailable('riskMoney', { ...risk, equity: undefined }), true);
+  assert.equal(quantityModeAvailable('riskPercentage', { ...risk, equity: undefined }), false);
+});
+test('U09/P03: sized quantity follows each mode and only writes changes', async () => {
+  const { resolveSizedQuantity } = await loadModule('src/core/quantity-input.ts');
+  const base = { mode: 'currency', disabled: false, qty: 2, lastUnits: 2, context };
+  assert.deepEqual(resolveSizedQuantity({ ...base, entered: 300 }), { clearPending: false, lastUnits: 3, sizing: 3 });
+  assert.deepEqual(resolveSizedQuantity({ ...base, entered: 200 }), { clearPending: false, lastUnits: 2 }, 'an unchanged quantity is not re-sent');
+  assert.deepEqual(resolveSizedQuantity({ ...base, entered: 200, disabled: true }), { clearPending: false });
+  assert.deepEqual(resolveSizedQuantity({ ...base, pending: { mode: 'currency', qty: 4 } }), { clearPending: true, entered: 400, lastUnits: 4, sizing: 4 });
+  assert.deepEqual(resolveSizedQuantity({ ...base, pending: { mode: 'currency', qty: 4 }, context: { ...context, price: undefined } }), { clearPending: false, sizing: NaN });
+  assert.deepEqual(resolveSizedQuantity({ ...base, mode: 'units', fallbackMode: 'currency' }), { clearPending: false }, 'units without a risk fallback writes nothing');
+  const risk = 'riskMoney';
+  assert.deepEqual(resolveSizedQuantity({ ...base, mode: 'units', fallbackMode: risk, qty: Number.NaN, lastUnits: 5 }), { clearPending: true, units: 5 }, 'a risk fallback restores the last units');
+  assert.deepEqual(resolveSizedQuantity({ ...base, mode: 'units', fallbackMode: risk, qty: 2 }), { clearPending: true }, 'an unchanged units quantity is not re-sent');
+});

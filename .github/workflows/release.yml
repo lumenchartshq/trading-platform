@@ -1,0 +1,76 @@
+name: Release
+
+# Publishes the package to npm when a `v<version>` tag is pushed, then creates
+# the GitHub release with that version's CHANGELOG.md section as its notes.
+# Uses npm trusted publishing (OIDC), so no npm token is stored in this
+# repository; the package must list this workflow as its trusted publisher on
+# npmjs.com.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  # Write lets the workflow create the GitHub release.
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install --global npm@11.6.2
+      - run: pnpm install --frozen-lockfile
+      - name: Check the tag matches the package version
+        run: |
+          actual="$(node -p "require('./package.json').version")"
+          if [ "$actual" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::package.json is $actual, tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+      # Fails before anything is published when the changelog has no entry.
+      - name: Check the release notes
+        run: node .github/scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/release-notes.md"
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      # pnpm pack applies publishConfig (dist exports) before publishing.
+      - name: Pack
+        run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      # The first version is published by hand (trusted publishing needs an
+      # existing package), so a version already on npm is skipped, not failed.
+      - name: Publish
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          version="${GITHUB_REF_NAME#v}"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "::notice::$name@$version is already on npm; nothing to publish"
+            exit 0
+          fi
+          npm publish "$RUNNER_TEMP"/pack/*.tgz --access public --provenance
+      # Reruns skip a release that already exists. Versions such as
+      # 0.2.0-beta.1 become pre-releases.
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::Release $GITHUB_REF_NAME already exists"
+            exit 0
+          fi
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" $prerelease
