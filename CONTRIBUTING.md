@@ -25,7 +25,7 @@ pnpm test
 
 ## Reporting security issues
 
-Please do not open a public issue. Email oss@lumencharts.com instead.
+Please do not open a public issue. Email support@lumencharts.com instead.
 
 ## License
 

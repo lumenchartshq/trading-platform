@@ -1,6 +1,6 @@
 {
   "name": "@lumencharts/trading-platform",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Trading platform for Lumen Charts: broker contracts, trading sessions, order ticket, account manager and depth UI, with a simulated broker and a paper broker.",
   "license": "Apache-2.0",
   "homepage": "https://docs.lumencharts.com/charting-library/trading",

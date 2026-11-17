@@ -3,6 +3,11 @@
 Each release of `@lumencharts/trading-platform` has a section here. The notes
 for a version also appear on its GitHub release.
 
+## 0.1.2
+
+No code changes from 0.1.1. Security reports now go to
+support@lumencharts.com; the address in earlier versions does not exist.
+
 ## 0.1.1
 
 No code changes from 0.1.0. This version is published from the release
