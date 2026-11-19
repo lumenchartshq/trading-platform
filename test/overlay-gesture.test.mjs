@@ -17,7 +17,7 @@ function stub({ current = true } = {}) {
   };
   const host = {
     session, onAction: action => calls.actions.push(action), onError: error => { throw error; }, safely: work => work(),
-    instrument: () => undefined, exitText: () => '—', currentAccountCurrency: () => 'USD',
+    instrument: () => undefined, exitText: () => '—', currentProfitAccount: () => ({ accounts: [{ id: 'A1', currency: 'USD' }], accountId: 'A1' }),
     lockFor: () => undefined, shownProtection: (_owner, projection, preview) => preview ?? projection.spec.protection,
     releaseEdit: () => {}, displayOn: (_key, begin) => begin(), updateOverlay: (_handle, patch) => calls.updates.push(patch),
     multipleExitLevels: () => false, pipFinanceNeeded: () => true, completedParent: () => undefined, confirmedExitParent: () => undefined,

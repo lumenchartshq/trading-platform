@@ -1,8 +1,8 @@
-import { accountDockHeight } from "../layout.js";
+import { accountDockHeight, dockFixed, dockResizable } from "../layout.js";
 import { useWatchedValue } from "../primitives.js";
 import type { DockSizes } from "../dock-sizes.js";
 import { ResizeHandle } from "../resize-handle.js";
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { Show, createEffect, createSignal, onCleanup } from "solid-js";
 import { BottomWidgetBarMode } from "../../contracts/broker.js";
 import type {
   TradingChartBinding,
@@ -29,7 +29,10 @@ export function AccountManagerWorkspace(props: {
   ): Promise<void>;
 }) {
   const manager = props.session.host.getAccountManagerVisibilityMode();
-  const mode = useWatchedValue(manager);
+  const requestedMode = useWatchedValue(manager);
+  // A fixed host box shows the tables at its own size: the panel stays normal whatever mode is saved or requested.
+  const fixed = dockFixed(props.presentation, "accounts");
+  const mode = () => (fixed ? BottomWidgetBarMode.Normal : requestedMode());
   const environment = useTradingValue(props.presentation.environment);
   const [active, setActive] = createSignal(
     props.collection.activeChart()?.binding.get(),
@@ -55,6 +58,7 @@ export function AccountManagerWorkspace(props: {
     else if (mode() === BottomWidgetBarMode.Maximized) size = bounds(true).max;
     props.presentation.setDockSize("accounts", size, {
       maximized: mode() === BottomWidgetBarMode.Maximized,
+      collapsed: mode() === BottomWidgetBarMode.Minimized,
     });
   });
   onCleanup(() => props.presentation.setDockSize("accounts", 0));
@@ -62,24 +66,27 @@ export function AccountManagerWorkspace(props: {
     props.session.host.setAccountManagerVisibilityMode(value);
   return (
     <div class="trading-account-workspace">
-      <ResizeHandle
-        class="trading-dock-resizer"
-        axis="height"
-        label="Resize Account Manager"
-        value={normalHeight()}
-        capture={height}
-        min={normalHeight(bounds().min)}
-        max={maximumHeight()}
-        disabled={mode() !== BottomWidgetBarMode.Normal}
-        resize={(value) => props.sizes.resize("accounts", value)}
-        save={() => props.sizes.save("accounts")}
-      />
+      <Show when={dockResizable(props.presentation, "accounts")}>
+        <ResizeHandle
+          class="trading-dock-resizer"
+          axis="height"
+          label="Resize Account Manager"
+          value={normalHeight()}
+          capture={height}
+          min={normalHeight(bounds().min)}
+          max={maximumHeight()}
+          disabled={mode() !== BottomWidgetBarMode.Normal}
+          resize={(value) => props.sizes.resize("accounts", value)}
+          save={() => props.sizes.save("accounts")}
+        />
+      </Show>
       <AccountManagerView
         session={props.session}
         environment={environment()}
         collapsed={mode() === BottomWidgetBarMode.Minimized}
         maximized={mode() === BottomWidgetBarMode.Maximized}
-        onClose={() => set(BottomWidgetBarMode.Minimized)}
+        fixed={fixed}
+        onClose={fixed ? undefined : () => set(BottomWidgetBarMode.Minimized)}
         onToggle={() =>
           set(
             mode() === BottomWidgetBarMode.Minimized

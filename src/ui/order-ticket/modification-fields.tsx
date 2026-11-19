@@ -4,24 +4,28 @@ import type { Order } from "../../contracts/broker.js";
 import type { OrderEditability } from "../../core/order-modification.js";
 import { NumberField } from "../primitives.js";
 
-const ownerNames = {
-  order: "order",
-  position: "position",
-  individualPosition: "position",
-} as const;
-
 /** Read-only identity of the order being modified; editable fields render separately. */
 export function ModificationSummary(props: {
   order: Readonly<Order>;
   editability: OrderEditability;
   typeName: string;
+  /** The symbol as the ticket names it. */
+  symbol: string;
   price: (value: number | undefined) => string;
 }) {
   const side = () => (props.order.side === Side.Buy ? "Buy" : "Sell");
+  const kind = () => ("parentId" in props.order ? props.editability.protection : undefined);
+  // A parent order is named by its ID. A position is one per symbol (or a lot of it), so it is named by the symbol,
+  // and its child's own ID, which brokers often derive from the position, is left out.
   const owner = () => {
-    const kind = props.editability.protection;
-    if (!kind || !("parentId" in props.order)) return undefined;
-    return `Protects ${ownerNames[kind]} ${props.order.parentId}`;
+    const value = kind();
+    if (!value || !("parentId" in props.order)) return undefined;
+    if (value === "order") return `Protects order ${props.order.parentId}`;
+    return `Protects the ${props.symbol} position`;
+  };
+  const identity = () => {
+    const value = kind();
+    return value === "position" || value === "individualPosition" ? owner() : `Order ${props.order.id}`;
   };
   const fixedPrice = () => {
     if (props.editability.price || props.order.stopType === StopType.TrailingStop)
@@ -36,8 +40,8 @@ export function ModificationSummary(props: {
         {fixedPrice()}
       </p>
       <p class="trading-muted">
-        Order {props.order.id}
-        <Show when={owner()}>{(text) => ` · ${text()}`}</Show>
+        {identity()}
+        <Show when={kind() === "order" && owner()}>{(text) => ` · ${text()}`}</Show>
       </p>
     </div>
   );

@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import { Dialog } from "@kobalte/core/dialog";
 import type { TradingSession } from "../../core/session.js";
 import { SymbolLogo } from "../symbol-logo.js";
+import { createSymbolLabel } from "../symbol-label.js";
 import { TradingButton } from "../primitives.js";
 import type { DialogRequest } from "./types.js";
 export function ConfirmDialog(props: {
@@ -16,13 +17,16 @@ export function ConfirmDialog(props: {
       ? props.session.features.show_symbol_logo_in_cancel_order_dialog
       : props.session.features.show_symbol_logo_in_close_position_dialog;
   };
+  // The request names the chart symbol; its line shows the broker's display symbol, as the order ticket does.
+  const label = createSymbolLabel(props.session, () => props.request.symbol?.name ?? "");
+  const line = (text: string) => (props.request.symbol && text === props.request.symbol.name ? label() : text);
   return <>
     <Show when={props.request.symbol}>
       {symbol => <SymbolLogo symbol={symbol().name} enabled={logo()} />}
     </Show>
     <Dialog.Description class="trading-dialog-lines">
       <For each={Array.isArray(props.request.content) ? props.request.content : [props.request.content]}>
-        {line => <span>{line}</span>}
+        {text => <span>{line(text)}</span>}
       </For>
     </Dialog.Description>
     <div class="trading-actions">

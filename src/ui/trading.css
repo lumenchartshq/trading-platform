@@ -1579,7 +1579,13 @@ html[data-theme="dark"] .trading-unit-menu .trading-select-item[data-selected] {
   margin: 0;
   color: var(--trd-text-muted);
 }
-.lumen-trading .trading-success .trading-button[data-tone="primary"] {
+.trading-next-order {
+  display: grid;
+  justify-items: center;
+  padding: 0 16px 16px;
+}
+.lumen-trading .trading-success .trading-button[data-tone="primary"],
+.lumen-trading .trading-next-order .trading-button[data-tone="primary"] {
   margin-block-start: 12px;
   min-width: 200px;
   min-height: 36px;
@@ -1639,7 +1645,8 @@ html[data-theme="dark"] .trading-unit-menu .trading-select-item[data-selected] {
   position: fixed;
   z-index: 1200;
   inset-inline-start: 16px;
-  inset-block-end: 14px;
+  /* A page that hosts the dialogs layer can lift toasts above its own fixed bottom controls. */
+  inset-block-end: var(--lumen-trading-toast-offset-bottom, 14px);
   width: min(400px, calc(100vw - 32px));
 }
 .trading-toast-list {
@@ -1777,22 +1784,6 @@ html[data-theme="dark"] .trading-unit-menu .trading-select-item[data-selected] {
   justify-content: flex-start;
   border: 0;
   border-radius: 0;
-}
-
-.lumen-trading.trading-draft-popover {
-  z-index: 100;
-  padding: 12px;
-  border: 1px solid var(--trd-border-control);
-  border-radius: 6px;
-  box-shadow: var(--trd-shadow-panel);
-  max-width: calc(100vw - 16px);
-}
-.trading-draft-title { font-weight: 600; margin-bottom: 8px; }
-.trading-draft-popover > [role="group"] {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
 }
 
 .lumen-trading .trading-modify-actions .trading-button[data-tone="primary"],

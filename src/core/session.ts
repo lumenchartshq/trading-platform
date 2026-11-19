@@ -65,6 +65,15 @@ export function createTradingSession(options: TradingSessionOptions) {
     options.displaySettings,
   );
   scope.own(() => displayPreferences.destroy());
+  const privacyMode = new ValueStore<boolean>(false);
+  scope.own(() => privacyMode.destroy());
+  const hostPrivacy = options.privacyMode;
+  if (hostPrivacy !== undefined) {
+    if (typeof hostPrivacy?.get !== "function" || typeof hostPrivacy.subscribe !== "function")
+      throw new TradingError("configuration", "privacyMode must be a readable value.");
+    privacyMode.set(hostPrivacy.get() === true);
+    scope.own(hostPrivacy.subscribe((value) => privacyMode.set(value === true)));
+  }
   const ticketSettings = new ValueStore<
     OrderTicketSettings
   >({ showRelativePriceControl: false, showOrderPreview: true });
@@ -418,6 +427,10 @@ export function createTradingSession(options: TradingSessionOptions) {
     ticketSettings: valueReader(ticketSettings),
     displaySettings: displayPreferences.state,
     displaySettingsError: displayPreferences.error,
+    /** The host's privacy mode: chart money the platform estimates is masked while it is on. */
+    privacyMode: valueReader(privacyMode),
+    /** Whether the position line names the currency of account-currency money P&L. */
+    showPositionProfitCurrency: options.showPositionProfitCurrency === true,
     /** A mounted UI routes `showTradingProperties` to its host's settings page; the latest registration wins. */
     setSettingsOpener(open: () => boolean): () => void {
       settingsOpener = open;

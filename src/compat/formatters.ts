@@ -2,6 +2,15 @@ import { symbolLabel } from '../core/features.js';
 import { OrderOrPositionMessageType, OrderStatus, OrderType, Side, StandardFormatterName, StopType } from '../contracts/broker.js';
 import type { FieldRef, INumberFormatter } from '../contracts/broker.js';
 import { TradingError } from '../core/errors.js';
+import { childProtectionField, type ProtectionField } from '../core/protection-legs.js';
+
+/** Type column names of protection child orders, in the column's sentence case. */
+const childLegNames: Record<ProtectionField, string> = {
+  takeProfit: 'Take profit',
+  stopLoss: 'Stop loss',
+  guaranteedStop: 'Guaranteed stop',
+  trailingStopPips: 'Trailing stop',
+};
 export interface FormattedCell { readonly text: string; readonly tone?: 'positive' | 'negative' | 'warning'; readonly superscriptLast?: boolean; /** Broker message for the cell, e.g. the Symbol formatter's withMessage dependency. */ readonly message?: string; }
 export interface TableFormatContext {
   readonly numeric: INumberFormatter;
@@ -94,6 +103,11 @@ export function formatStandard(name: StandardFormatterName | undefined, values: 
     case StandardFormatterName.PositionSide: return { text: sideLabel(value, 'Long', 'Short') };
     case StandardFormatterName.Status: return { text: typeof value === 'number' ? OrderStatus[value] ?? '' : '' };
     case StandardFormatterName.Type: {
+      // Dependencies: [type, parentId, stopType]. A child order names the protection leg it is.
+      if (values[1] && (value === OrderType.Limit || value === OrderType.Stop)) {
+        const leg = childProtectionField({ type: value, stopType: values[2] as StopType | undefined });
+        if (leg) return { text: childLegNames[leg] };
+      }
       if (values[2] === StopType.TrailingStop) return { text: 'Trailing stop' };
       if (values[2] === StopType.GuaranteedStop) return { text: 'Guaranteed stop' };
       if (value === OrderType.StopLimit) return { text: 'Stop-limit' };

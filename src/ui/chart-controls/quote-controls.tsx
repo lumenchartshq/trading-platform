@@ -1,5 +1,3 @@
-import { ChartDraftControls } from "../order-ticket/chart-draft-controls.js";
-import type { TicketController } from "../order-ticket/controller.js";
 import { Show } from "solid-js";
 import type { PreOrder } from "../../contracts/broker.js";
 import type { TradingChartBinding, ReadonlyValue, TradingChartPort } from "../../contracts/ports.js";
@@ -10,7 +8,6 @@ import { ChartQuoteButtons } from "./quote-buttons.js";
 import { useQuoteWidths } from "./quote-widths.js";
 export function QuoteControls(props: {
   visible?: ReadonlyValue<boolean>;
-  ticket?: TicketController;
   session: TradingSession;
   chart: TradingChartPort;
   open(
@@ -58,7 +55,6 @@ export function QuoteControls(props: {
           Market depth
         </TradingButton>
       </Show>
-      <Show when={props.ticket}>{ticket => <ChartDraftControls session={props.session} chart={props.chart} ticket={ticket()} />}</Show>
     </div>
   );
 }

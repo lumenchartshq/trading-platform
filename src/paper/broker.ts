@@ -280,17 +280,24 @@ export function createPaperBroker(market: PaperMarket, options: PaperBrokerOptio
     }
     if (positions.size) finance.request();
   }
+  /** The price a pending order rests at: the limit for a limit order, the trigger for a stop; none for market. */
+  function entryPrice(order: PreOrder): number | undefined {
+    if (order.type === OrderType.Limit) return order.limitPrice;
+    if (order.type === OrderType.Stop) return order.stopPrice;
+    return undefined;
+  }
   function validate(order: PreOrder) {
     const item = instrument(order.symbol);
     if (!validQuantity(item, order.qty)) throw new PaperRejection('invalid', 'Enter a valid quantity.');
     if (![OrderType.Market, OrderType.Limit, OrderType.Stop].includes(order.type)) throw new PaperRejection('unsupported', 'This order type is unavailable.');
     if (order.side !== Side.Buy && order.side !== Side.Sell) throw new PaperRejection('invalid', 'Invalid order side.');
-    for (const value of [order.limitPrice, order.stopPrice, order.takeProfit, order.stopLoss])
+    // A draft keeps the other type's price when the type changes; only the price this type uses counts.
+    const entry = entryPrice(order);
+    for (const value of [entry, order.takeProfit, order.stopLoss])
       if (value !== undefined && !onTick(value, item.tick)) throw new PaperRejection('invalid', 'Enter a price on the instrument tick.');
-    if ((order.type === OrderType.Limit && order.limitPrice === undefined) || (order.type === OrderType.Stop && order.stopPrice === undefined))
+    if (order.type !== OrderType.Market && entry === undefined)
       throw new PaperRejection('invalid', 'An order price is required.');
-    const price = priceFor(order.symbol, order.side);
-    validateProtection(order.side, order.limitPrice ?? order.stopPrice ?? price, order);
+    validateProtection(order.side, entry ?? priceFor(order.symbol, order.side), order);
     const activeSymbols = new Set([...positions.values()].map(position => position.symbol));
     for (const row of orders.values()) if (row.status === OrderStatus.Working) activeSymbols.add(row.symbol);
     if (!activeSymbols.has(order.symbol) && activeSymbols.size >= 10) throw new PaperRejection('rejected', 'Paper trading supports up to ten active symbols.');

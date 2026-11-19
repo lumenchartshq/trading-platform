@@ -1,7 +1,7 @@
 import { CustomField } from "../order-ticket/custom-field.js";
 import { positionCustomValues } from "../../core/position-custom-fields.js";
 import { CloseIcon } from "../icons.js";
-import { symbolLabel } from "../../core/features.js";
+import { createSymbolLabel } from "../symbol-label.js";
 import { createResource, createSignal, onCleanup, Show, For } from "solid-js";
 import { Side } from "../../contracts/broker.js";
 import type {
@@ -32,6 +32,7 @@ export function PositionProtection(props: {
   complete(approved: boolean): void;
   busy(value: boolean): void;
 }) {
+  const label = createSymbolLabel(props.session, () => props.request.position.symbol);
   const [draft, setDraft] = createSignal<Brackets>(
     structuredClone(props.request.brackets),
   );
@@ -171,7 +172,7 @@ export function PositionProtection(props: {
     >
       <header class="trading-panel-header trading-ticket-header">
         <strong>
-          {symbolLabel(props.request.position.symbol, props.session.features)}
+          {label()}
         </strong>
         <TradingButton
           aria-label="Close position protection"

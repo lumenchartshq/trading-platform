@@ -11,6 +11,7 @@ import { valueReader } from "../core/readers.js";
 import { ValueStore } from "../core/value-store.js";
 import { createDockSizes } from "./dock-sizes.js";
 import { bindSurfaceTheme } from "./surface-theme.js";
+import { adoptSurfaceDocument } from "./host-document.js";
 import { TradingPopupMount } from "./popup-mount.js";
 import { createDomWorkspace } from "./dom/workspace.js";
 import { Show } from "solid-js";
@@ -119,15 +120,22 @@ export function mountTradingPlatform(options: TradingMountOptions) {
   };
   function surface(
     kind: "ticket" | "accounts" | "dialogs",
-    mount: (element: HTMLElement) => () => void,
+    mount: (element: HTMLElement, popups: HTMLElement | undefined) => () => void,
   ): void {
     const owned = presentation.acquireSurface(kind);
     owned.element.classList.add("lumen-trading");
     if (kind === "ticket") ticketElement = owned.element;
     if (kind === "dialogs") popupMountElement = owned.element;
     scope.own(owned.release);
+    // A host-placed surface (another document) gets its own event delegation and popup layer.
+    const hosted = adoptSurfaceDocument(owned.element, document);
+    scope.own(hosted.release);
     scope.own(bindSurfaceTheme(owned.element, presentation.environment));
-    scope.own(mount(owned.element));
+    if (hosted.popupMount) scope.own(bindSurfaceTheme(hosted.popupMount, presentation.environment));
+    // Popups position against their own document: a surface reuses the dialogs layer only when the two share one.
+    const sharedPopups =
+      popupMountElement?.ownerDocument === owned.element.ownerDocument ? popupMountElement : undefined;
+    scope.own(mount(owned.element, hosted.popupMount ?? sharedPopups));
   }
   function open(
     binding: TradingChartBinding,
@@ -205,10 +213,10 @@ export function mountTradingPlatform(options: TradingMountOptions) {
         element,
       ),
     );
-    surface("ticket", (element) =>
+    surface("ticket", (element, popups) =>
       render(
         () => (
-          <TradingPopupMount.Provider value={popupMountElement}>
+          <TradingPopupMount.Provider value={popups}>
             <TicketShell
               sizes={sizes}
               session={session}
@@ -250,10 +258,10 @@ export function mountTradingPlatform(options: TradingMountOptions) {
     if (!session.features.trading_account_manager)
       presentation.setDockSize("accounts", 0);
     if (session.features.trading_account_manager)
-      surface("accounts", (element) =>
+      surface("accounts", (element, popups) =>
         render(
           () => (
-            <TradingPopupMount.Provider value={popupMountElement}>
+            <TradingPopupMount.Provider value={popups}>
               <TradingSymbolLogos.Provider value={symbolLogos}>
               <AccountManagerWorkspace
                 sizes={sizes}
@@ -296,6 +304,8 @@ export function mountTradingPlatform(options: TradingMountOptions) {
         const open = isPositionPaneEntry(entry);
         if (open === positionPaneOpen) return;
         positionPaneOpen = open;
+        // A new protection pane must reveal its chart even when a previous ticket still occupies the dock.
+        session.host.orderPanelVisibility()?.setValue(isTicketOpen() || open, open);
         if (open) dom.hide();
         syncTicketDock();
       }),
@@ -306,7 +316,7 @@ export function mountTradingPlatform(options: TradingMountOptions) {
     scope.own(
       ticket.state.subscribe((value) => {
         const ticketOpen = ticketPhaseOpen(value.phase);
-        session.host.orderPanelVisibility()?.setValue(ticketOpen);
+        session.host.orderPanelVisibility()?.setValue(ticketOpen || positionPaneOpen);
         if (ticketOpen) dom.hide();
         if (ticketOpen !== ticketWasOpen) {
           ticketWasOpen = ticketOpen;
@@ -357,7 +367,6 @@ export function mountTradingPlatform(options: TradingMountOptions) {
           () => (
             <QuoteControls
               session={session}
-              ticket={ticket}
               chart={chart}
               visible={owned.visible}
               open={open}

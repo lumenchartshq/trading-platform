@@ -6,7 +6,7 @@ import { SubmitBar } from "./submit-bar.js";
 import { ReviewPanel } from "./review-panel.js";
 import { OrderSent } from "./order-sent.js";
 import { locked as ticketLocked, bracketsAllowed as ticketBracketsAllowed, riskAllowed as ticketRiskAllowed,
-  phaseText as ticketPhaseText, submitAction as ticketSubmitAction, priceSuffix, typeName } from "./rules.js";
+  phaseText as ticketPhaseText, ticketCanStartNext, submitAction as ticketSubmitAction, priceSuffix, typeName } from "./rules.js";
 import { CloseIcon } from "../icons.js";
 import { TradingTabs } from "../tabs.js";
 import { TicketSymbolSearch } from "./symbol-search.js";
@@ -308,10 +308,12 @@ export function OrderTicketView(props: {
           />
         )}
       </Show>
+      {/* The ticket's own rules validate every field, so a zero quantity and an empty one get the same kind of message. */}
       <form
         ref={draftForm}
         hidden={!formVisible()}
         class="trading-ticket-form"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           if (!editingExits()) void props.controller.review();
@@ -325,6 +327,7 @@ export function OrderTicketView(props: {
                 order={brokerOrder()!}
                 editability={editability()!}
                 typeName={typeName(brokerOrder()!.type)}
+                symbol={displaySymbol()}
                 price={market.price}
               />
             </Show>
@@ -375,7 +378,7 @@ export function OrderTicketView(props: {
                 value: type,
                 label: typeName(type),
               }))}
-              onChange={(type) => props.controller.patch({ type })}
+              onChange={(type) => props.controller.changeType(type)}
             />
             <Show when={state().instrument}>
               <Show when={limit() && !locked("price")}>
@@ -551,6 +554,13 @@ export function OrderTicketView(props: {
       <p role="status" aria-live="polite">
         {phaseText()}
       </p>
+      <Show when={ticketCanStartNext(state()) && (modifying() || state().phase === "unconfirmed")}>
+        <div class="trading-next-order" data-ui="start-next-order">
+          <TradingButton tone="primary" onClick={() => props.controller.startNext()}>
+            Start creating order
+          </TradingButton>
+        </div>
+      </Show>
     </section>
   );
 }

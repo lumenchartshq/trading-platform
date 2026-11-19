@@ -1,17 +1,21 @@
 import { positionProfitVisible } from "../core/trading-settings.js";
 import { showsIndividualPositions } from "../core/capabilities.js";
-import type { INumberFormatter } from "../contracts/broker.js";
+import type { INumberFormatter, InstrumentInfo, Position } from "../contracts/broker.js";
 import type { TradingSession } from "../core/session.js";
 import { profitTickPrecision } from "../core/financial-rules.js";
 import type { ProfitDisplayMode } from "../core/financial-rules.js";
 import { createPositionEstimates } from "../core/position-estimates.js";
 import { TradingError } from "../core/errors.js";
+import { positionProfitCurrency } from "../core/position-profit-currency.js";
 import { profitTickUnit } from "./exit-profit.js";
 type PositionKind = "position" | "individualPosition";
 interface FormatterEntry {
   readonly generation: number;
   readonly mode: ProfitDisplayMode;
+  /** Percentage and tick modes: their own unit. Money takes its unit from `positionProfitCurrency`. */
   unit?: string;
+  /** Money mode, when its currency is the instrument's. */
+  instrument?: InstrumentInfo;
   formatter?: INumberFormatter;
 }
 
@@ -63,7 +67,10 @@ export function createChartPositionProfit(
   ): string | undefined {
     const display = session.displaySettings.get();
     if (!positionProfitVisible(display)) return undefined;
+    // Estimated money is masked in privacy mode; a broker-supplied value is the broker's to mask.
     const mode = display.positionProfitDisplay;
+    if (session.privacyMode.get() && mode === "money" && !session.policy.get().flags.supportPLUpdate)
+      return undefined;
     const value = profitValue(kind, id, position);
     if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
     const entry = formatters.get(position.symbol);
@@ -82,12 +89,29 @@ export function createChartPositionProfit(
         );
       if (!text) return undefined;
       if (entry.unit === "%") return `${text}%`;
-      return entry.unit ? `${text} ${entry.unit}` : text;
+      const unit = mode === "money" ? moneyUnit(position, entry) : entry.unit;
+      return unit ? `${text} ${unit}` : text;
     } catch (cause) {
       entry.formatter = undefined;
       onError(cause);
       return undefined;
     }
+  }
+  function moneyCurrency(position: Pick<Position, "symbol">, instrument?: InstrumentInfo) {
+    return positionProfitCurrency(position, {
+      symbolPolicy: session.symbolPolicy,
+      instrument,
+      accounts: session.accounts.get(),
+      accountId: session.state.connection.get().accountId,
+    });
+  }
+  /**
+   * Instrument-currency money always names its currency, as in the reference terminal; account-currency money names
+   * it only when the host sets `showPositionProfitCurrency`. Either shows the bare amount while the currency is unknown.
+   */
+  function moneyUnit(position: Pick<Position, "symbol">, entry: FormatterEntry): string | undefined {
+    const currency = moneyCurrency(position, entry.instrument);
+    return currency.source === "instrument" || session.showPositionProfitCurrency ? currency.currency : undefined;
   }
   function synchronize(
     symbols: readonly string[],
@@ -146,11 +170,11 @@ export function createChartPositionProfit(
           return (await session.formatters(symbol)).numeric;
         }
         if (mode === "money") {
-          // Account-currency money carries no unit; instrument-currency money names its currency.
-          if (session.policy.get().flags.positionPLInInstrumentCurrency) {
+          // Instrument-currency money needs the instrument before its label can name the currency.
+          if (moneyCurrency({ symbol }).source === "instrument") {
             const instrument = await session.symbolInfo(symbol);
             if (!current()) return undefined;
-            entry.unit = instrument.currency;
+            entry.instrument = instrument;
           }
           return (await session.formatters(symbol)).numeric;
         }

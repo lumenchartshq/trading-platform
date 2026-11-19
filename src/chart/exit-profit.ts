@@ -4,6 +4,7 @@ import type { TradingDisplaySettings } from "../contracts/ports.js";
 import { positionProfit } from "../core/financial-rules.js";
 import { decimalPlaces } from "../core/number-precision.js";
 import type { ProtectionField } from "../core/protection-legs.js";
+import type { PositionProfitCurrency } from "../core/position-profit-currency.js";
 
 /** Instruments whose pip differs from the minimum tick count in pips; everything else counts ticks. */
 export function profitTickUnit(instrument: Pick<InstrumentInfo, "pipSize" | "minTick">): "pips" | "ticks" {
@@ -19,12 +20,14 @@ export interface ExitProfitInput {
   readonly exit: number;
   readonly display: TradingDisplaySettings;
   readonly pipValues?: PipValues;
-  /** `positionPLInInstrumentCurrency`: money stays in the instrument currency. */
-  readonly inInstrumentCurrency: boolean;
-  readonly accountCurrency?: string;
+  /** From `positionProfitCurrency`; instrument-currency money also skips the pip-value conversion. */
+  readonly currency: PositionProfitCurrency;
 }
 
 /** Estimated result of closing at an exit price, as chart pill text; undefined when it cannot be shown. */
+/** What chart money shows while the host's privacy mode is on. */
+export const MASKED_MONEY = "***";
+
 export function exitProfitText(input: ExitProfitInput): string | undefined {
   const { instrument, display } = input;
   if (!instrument || input.entry === undefined || !bracketProfitVisible(display)) return undefined;
@@ -37,13 +40,13 @@ export function exitProfitText(input: ExitProfitInput): string | undefined {
     supportPLUpdate: false,
     source: "chart",
     pipValues: input.pipValues,
-    inInstrumentCurrency: input.inInstrumentCurrency,
+    inInstrumentCurrency: input.currency.source === "instrument",
   });
   if (amount === undefined) return undefined;
   const value = `${amount > 0 ? "+" : ""}${amount.toFixed(2)}`;
   if (mode === "percentage") return `${value}%`;
   if (mode === "ticks") return `${value} ${profitTickUnit(instrument)}`;
-  const unit = input.inInstrumentCurrency ? instrument.currency : input.accountCurrency;
+  const unit = input.currency.currency;
   return unit ? `${value} ${unit}` : undefined;
 }
 

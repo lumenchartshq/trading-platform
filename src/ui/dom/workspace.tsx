@@ -1,9 +1,11 @@
 import { sameBinding } from "../../core/identity.js";
-import { COMPACT_WIDTH } from "../layout.js";
+import { compactSidePane, dockResizable } from "../layout.js";
 import type { DockSizes } from "../dock-sizes.js";
 import { ResizeHandle } from "../resize-handle.js";
 import { useTradingValue } from "../primitives.js";
 import { bindSurfaceTheme } from "../surface-theme.js";
+import { adoptSurfaceDocument } from "../host-document.js";
+import { TradingPopupMount } from "../popup-mount.js";
 import { createSignal, Show } from "solid-js";
 import { render } from "solid-js/web";
 import type {
@@ -59,7 +61,7 @@ export function createDomWorkspace(options: {
   );
   scope.own(
     options.presentation.environment.subscribe((environment) => {
-      if (visible && environment.width < COMPACT_WIDTH && currentChart) {
+      if (visible && compactSidePane(options.presentation, environment.width) && currentChart) {
         const chart = currentChart;
         const state = selected()?.state.get();
         const quantity = state?.phase === "ready" ? state.qty : undefined;
@@ -98,7 +100,7 @@ export function createDomWorkspace(options: {
         !options.session.symbolPolicy(chart.binding.get().symbol).dom
       )
         return;
-      if (options.presentation.environment.get().width < COMPACT_WIDTH) {
+      if (compactSidePane(options.presentation, options.presentation.environment.get().width)) {
         options.compactTicket(chart, selected()?.state.get().qty);
         return;
       }
@@ -108,11 +110,17 @@ export function createDomWorkspace(options: {
         element.classList.add("lumen-trading");
         scope.own(surface.release);
         scope.own(bindSurfaceTheme(element, options.presentation.environment));
+        // A host-placed side pane (another document) needs its own event delegation and popup layer.
+        const hosted = adoptSurfaceDocument(element, document);
+        scope.own(hosted.release);
+        if (hosted.popupMount) scope.own(bindSurfaceTheme(hosted.popupMount, options.presentation.environment));
         scope.own(
           render(
             () => (
-              <>
-                <DomWidthHandle />
+              <TradingPopupMount.Provider value={hosted.popupMount}>
+                <Show when={dockResizable(options.presentation, "dom")}>
+                  <DomWidthHandle />
+                </Show>
                 <Show when={selected()} keyed>
                   {(controller) => (
                     <DepthPanelView
@@ -123,7 +131,7 @@ export function createDomWorkspace(options: {
                     />
                   )}
                 </Show>
-              </>
+              </TradingPopupMount.Provider>
             ),
             element,
           ),

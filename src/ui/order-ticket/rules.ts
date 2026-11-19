@@ -46,6 +46,13 @@ export function priceSuffix(order: Readonly<PreOrder>, format: (value: number) =
   return price === undefined ? "" : ` @ ${format(price)}`;
 }
 export const typeName = orderTypeName;
+/**
+ * Whether the ticket has settled with nothing left to send: a confirmed order or modification, or a result the session
+ * stopped checking on. The ticket then offers to start a new order instead of leaving the user at a dead end.
+ */
+export function ticketCanStartNext(state: Pick<TicketState, "phase" | "checking">): boolean {
+  return state.phase === "confirmed" || (state.phase === "unconfirmed" && state.checking !== true);
+}
 /** Ticket phases where the user can still change the draft (on the ticket or its chart lines). */
 export function ticketEditable(phase: string): boolean {
   return phase === "editing" || phase === "error";

@@ -9,6 +9,7 @@ import type { TradingSession } from "../../core/session.js";
 import { CloseIcon } from "../icons.js";
 import { useTradingValue } from "../primitives.js";
 import { SymbolLogo } from "../symbol-logo.js";
+import { createSymbolLabel } from "../symbol-label.js";
 
 const visibleFor = 6000;
 const visibleLimit = 3;
@@ -31,6 +32,12 @@ const glyphs = {
 };
 
 /** Kobalte's toaster is page-wide, so each mount dismisses only its own entries. */
+/** The notification's symbol as the platform's panels name it: the broker's display symbol once the instrument is known. */
+function ToastSymbol(props: { session: TradingSession; symbol: string }) {
+  const label = createSymbolLabel(props.session, () => props.symbol);
+  return <span class="trading-toast-symbol"><SymbolLogo symbol={props.symbol} enabled />{label()}</span>;
+}
+
 export function TradingToasts(props: { session: TradingSession }) {
   const region = `trading-toasts-${createUniqueId()}`;
   const shown = new Map<number, { item: TradingNotification; shownAt: number }>();
@@ -70,7 +77,7 @@ export function TradingToasts(props: { session: TradingSession }) {
               <Toast.Title as="strong">
                 {item.title}
                 <Show when={item.symbol}>
-                  {(symbol) => <> on <span class="trading-toast-symbol"><SymbolLogo symbol={symbol()} enabled />{symbol()}</span></>}
+                  {(symbol) => <> on <ToastSymbol session={props.session} symbol={symbol()} /></>}
                 </Show>
               </Toast.Title>
               <Toast.Description as="div" class="trading-toast-detail">

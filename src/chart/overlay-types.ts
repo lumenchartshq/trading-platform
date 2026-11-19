@@ -7,6 +7,7 @@ import type {
   TradingProtectionView,
 } from "../contracts/ports.js";
 import type { DisposalScope } from "../core/disposal.js";
+import type { ProfitAccount } from "../core/position-profit-currency.js";
 import type { OverlayEntityKind, Projection } from "./overlay-projection.js";
 
 export interface OverlayAction {
@@ -28,7 +29,8 @@ export interface Overlay {
   /** The protection leg the active gesture drags; undefined for a body move. */
   gestureLeg?: TradingProtectionLeg;
   releaseFinance?: () => void;
-  moneyCurrency?: string;
+  /** The account a drag's money preview reads, fixed when the gesture starts. */
+  moneyAccount?: ProfitAccount;
   previewEvent?: Extract<TradingOverlayEvent, { gestureId: string }>;
   /** A confirmed exit dragged by its body edits its parent's protection leg instead of the exit order. */
   parentEdit?: {

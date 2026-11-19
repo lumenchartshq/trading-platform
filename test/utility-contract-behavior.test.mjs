@@ -200,10 +200,14 @@ test('U05/U06/U07: StandardFormattersDependenciesMapping [StandardFormatterName.
       { id: 'B', type: 4 },
       { id: 'C', type: 3, parentId: 'A', stopType: 1 },
       { id: 'D', type: 3, parentId: 'A', stopType: 2 },
+      { id: 'E', type: 1, parentId: 'A' },
+      { id: 'F', type: 3, parentId: 'A' },
+      { id: 'G', type: 3 },
     ],
     [{ id: 'type', label: 'Type', dataFields: ['type', 'parentId', 'stopType'], formatter: 'type' }],
   );
-  assert.deepEqual(cells.map(([text]) => text), ['Limit', 'Stop-limit', 'Trailing stop', 'Guaranteed stop']);
+  // A child order names its protection leg; the same order types without a parent keep their own names.
+  assert.deepEqual(cells.map(([text]) => text), ['Limit', 'Stop-limit', 'Trailing stop', 'Guaranteed stop', 'Take profit', 'Stop loss', 'Stop']);
 });
 
 test('U05/U06/U07: StandardFormattersDependenciesMapping [StandardFormatterName.LocalDate] uses the environment timezone for its date property', async () => {

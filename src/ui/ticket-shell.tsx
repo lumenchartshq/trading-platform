@@ -2,7 +2,7 @@ import { createTicketPlacement } from "./order-ticket/placement.js";
 import { TicketLayoutContext } from "./order-ticket/layout-context.js";
 import type { DockSizes } from "./dock-sizes.js";
 import { ResizeHandle } from "./resize-handle.js";
-import { COMPACT_WIDTH } from "./layout.js";
+import { compactSidePane, dockResizable } from "./layout.js";
 import { trapTab } from "./trap-tab.js";
 import { Dialog } from "@kobalte/core/dialog";
 import { Show, onCleanup } from "solid-js";
@@ -75,7 +75,9 @@ export function TicketShell(props: {
     else queueMicrotask(restore);
   };
   const width = useTradingValue(props.sizes.right);
-  const compact = () => environment().width < COMPACT_WIDTH;
+  const resizable = dockResizable(props.presentation, "ticket");
+  // A host-sized pane is a page column: never modal, never dismissed by an outside click.
+  const compact = () => compactSidePane(props.presentation, environment().width);
   const ticket = useTradingValue(props.controller.state, (previous, next) => {
       if (next.phase === "loading" && previous.revision !== next.revision) {
         const active =
@@ -119,36 +121,31 @@ export function TicketShell(props: {
           const request = props.session.dialogs.current.get()?.request;
           // A desktop dock remains open while the chart or another dialog has
           // focus. Compact modal tickets retain their normal outside dismissal.
-          if (
-            environment().width >= COMPACT_WIDTH ||
-            (request && !sidePane(request.kind))
-          )
+          if (!compact() || (request && !sidePane(request.kind)))
             event.preventDefault();
         }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
         }}
       >
-        <ResizeHandle
-        class="trading-dock-resizer"
-          axis="width"
-          label="Resize order panel"
-          value={width()}
-          min={280}
-          max={480}
-          disabled={
-            environment().width < COMPACT_WIDTH ||
-            placementState().floating ||
-            !canInteract()
-          }
-          resize={(value) => props.sizes.resize("right", value)}
-          save={() => props.sizes.save("right")}
-        />
+        <Show when={resizable}>
+          <ResizeHandle
+            class="trading-dock-resizer"
+            axis="width"
+            label="Resize order panel"
+            value={width()}
+            min={280}
+            max={480}
+            disabled={compact() || placementState().floating || !canInteract()}
+            resize={(value) => props.sizes.resize("right", value)}
+            save={() => props.sizes.save("right")}
+          />
+        </Show>
         <Dialog.Title class="trading-visually-hidden">
           Order ticket
         </Dialog.Title>
         <TradingDialogPopupMount.Provider
-          value={() => (environment().width < COMPACT_WIDTH ? content : undefined)}
+          value={() => (compact() ? content : undefined)}
         >
         <TicketLayoutContext.Provider
           value={{ placement, state: placementState, canMove }}

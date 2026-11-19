@@ -1,5 +1,5 @@
 import { userMessage } from "../../core/errors.js";
-import { symbolLabel } from "../../core/features.js";
+import { createSymbolLabel } from "../symbol-label.js";
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 import { OrderType, Side } from "../../contracts/broker.js";
 import type { TradingSession } from "../../core/session.js";
@@ -112,6 +112,7 @@ export function DepthPanelView(props: {
   locale: string;
   onClose(): void;
 }) {
+  const label = createSymbolLabel(props.session, () => props.controller.binding.symbol);
   const state = useTradingValue(props.controller.state),
     policy = useTradingValue(props.session.policy),
     symbolOptions = useTradingValue(props.session.symbolOptionsRevision),
@@ -151,7 +152,7 @@ export function DepthPanelView(props: {
       <header class="trading-panel-header">
         <strong>
           Market depth ·{" "}
-          {symbolLabel(props.controller.binding.symbol, props.session.features)}
+          {label()}
         </strong>
         <TradingButton onClick={props.onClose}>Close</TradingButton>
       </header>

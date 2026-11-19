@@ -92,6 +92,8 @@ export function AccountManagerView(props: {
   onClose?(): void;
   collapsed: boolean;
   maximized: boolean;
+  /** In a fixed host box: no collapse, maximize or hide controls. */
+  fixed?: boolean;
   canTrade: boolean;
   onToggle(): void;
   onMaximize(): void;
@@ -327,13 +329,18 @@ export function AccountManagerView(props: {
   return (
     <section data-ui="trading-accounts" aria-label="Account Manager">
       <header class="trading-account-rail" aria-label="Account Manager bar">
-        <TradingButton
-          class="trading-account-caption"
-          aria-expanded={!props.collapsed}
-          onClick={props.onToggle}
+        <Show
+          when={!props.fixed}
+          fallback={<span class="trading-account-caption">Account Manager</span>}
         >
-          Account Manager
-        </TradingButton>
+          <TradingButton
+            class="trading-account-caption"
+            aria-expanded={!props.collapsed}
+            onClick={props.onToggle}
+          >
+            Account Manager
+          </TradingButton>
+        </Show>
         <Show when={props.session.features.order_panel}>
           <TradingButton
             class="trading-account-trade"
@@ -356,38 +363,40 @@ export function AccountManagerView(props: {
           </TradingButton>
         </Show>
         <span class="trading-account-rail-spacer" />
-        <TradingButton
-          class="trading-icon-button"
-          aria-label={
-            props.collapsed
-              ? "Expand Account Manager"
-              : "Collapse Account Manager"
-          }
-          onClick={props.onToggle}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d={props.collapsed ? "m6 14 6-5 6 5" : "M5 17h14"} />
-          </svg>
-        </TradingButton>
-        <TradingButton
-          class="trading-icon-button"
-          aria-label={
-            props.maximized
-              ? "Restore Account Manager"
-              : "Maximize Account Manager"
-          }
-          onClick={props.onMaximize}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d={
-                props.maximized
-                  ? "M8 4v4H4m12-4v4h4M4 16h4v4m8 0v-4h4"
-                  : "M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5"
-              }
-            />
-          </svg>
-        </TradingButton>
+        <Show when={!props.fixed}>
+          <TradingButton
+            class="trading-icon-button"
+            aria-label={
+              props.collapsed
+                ? "Expand Account Manager"
+                : "Collapse Account Manager"
+            }
+            onClick={props.onToggle}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={props.collapsed ? "m6 14 6-5 6 5" : "M5 17h14"} />
+            </svg>
+          </TradingButton>
+          <TradingButton
+            class="trading-icon-button"
+            aria-label={
+              props.maximized
+                ? "Restore Account Manager"
+                : "Maximize Account Manager"
+            }
+            onClick={props.onMaximize}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d={
+                  props.maximized
+                    ? "M8 4v4H4m12-4v4h4M4 16h4v4m8 0v-4h4"
+                    : "M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5"
+                }
+              />
+            </svg>
+          </TradingButton>
+        </Show>
       </header>
       <Show when={!props.collapsed}>
         <div class="trading-account-content">

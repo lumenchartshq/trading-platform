@@ -1,7 +1,8 @@
 import { bracketProfitInMoney, effectiveDisplay } from "../core/trading-settings.js";
 import { oppositeSide, orderEntryPrice } from "../core/financial-rules.js";
-import { exitProfitText, exitTooltip } from "./exit-profit.js";
-import { accountCurrency, bindingKey } from "../core/identity.js";
+import { exitProfitText, exitTooltip, MASKED_MONEY } from "./exit-profit.js";
+import { bindingKey } from "../core/identity.js";
+import { positionProfitCurrency, type ProfitAccount } from "../core/position-profit-currency.js";
 import {
   overlayKindVisible,
   overlaySpecPatch,
@@ -105,18 +106,19 @@ export function createOverlayCoordinator(
     qty: number,
     entry: number | undefined,
     exit: number,
-    currency?: string,
+    account: ProfitAccount,
   ): string {
+    if (session.privacyMode.get()) return MASKED_MONEY;
+    const instrument = instruments.get(symbol);
     const text = exitProfitText({
-      instrument: instruments.get(symbol),
+      instrument,
       side,
       qty,
       entry,
       exit,
       display: session.displaySettings.get(),
       pipValues: session.state.pipValues.get(symbol),
-      inInstrumentCurrency: session.symbolPolicy(symbol).flags.positionPLInInstrumentCurrency,
-      accountCurrency: currency,
+      currency: positionProfitCurrency({ symbol }, { ...account, symbolPolicy: session.symbolPolicy, instrument }),
     });
     return text ?? "—";
   }
@@ -127,8 +129,9 @@ export function createOverlayCoordinator(
     if (!field || price === undefined) return undefined;
     return exitTooltip({ field, side: oppositeSide(order.side), entry, exit: price, instrument: instruments.get(order.symbol) });
   }
-  function currentAccountCurrency() {
-    return accountCurrency(session.accounts.get(), session.state.connection.get().accountId);
+  /** The account a line's money is read from: today the session's current account. */
+  function currentProfitAccount(): ProfitAccount {
+    return { accounts: session.accounts.get(), accountId: session.state.connection.get().accountId };
   }
   const editPresentation = createEditPresentation({
     edits: session.chartEdits.state,
@@ -172,7 +175,7 @@ export function createOverlayCoordinator(
     safely,
     instrument: (symbol) => instruments.get(symbol),
     exitText,
-    currentAccountCurrency,
+    currentProfitAccount,
     lockFor,
     shownProtection,
     releaseEdit: editPresentation.releaseEdit,
@@ -212,7 +215,7 @@ export function createOverlayCoordinator(
               value.qty,
               parentEntryPrice,
               orderEntryPrice(value as Order) ?? 0,
-              currentAccountCurrency(),
+              currentProfitAccount(),
             )
           : undefined,
       bracketTooltip: parent && kind === "order" ? bracketTooltip(value as Order, parentEntryPrice) : undefined,
@@ -481,6 +484,7 @@ export function createOverlayCoordinator(
   scope.own(
     session.policy.subscribe(() => rebuild()),
   );
+  scope.own(session.privacyMode.subscribe(() => rebuild()));
   scope.own(
     session.displaySettings.subscribe(() => {
       const next = lineLayoutFrom(session.displaySettings.get());

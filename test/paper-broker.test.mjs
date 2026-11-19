@@ -184,6 +184,24 @@ test('paper rejections carry a code, so the chart shows their message instead of
   }
 });
 
+test('only the price an order type uses is checked; a draft\'s leftover price from another type is ignored', async () => {
+  const prices = market(), recorded = host();
+  const paperBroker = createPaperBroker(prices.port);
+  const broker = paperBroker.brokerFactory(recorded.host);
+  try {
+    prices.quote(2000, 2000.1);
+    // Off-tick (tick 0.1) leftover stop price on a limit order, and a leftover limit below the stop's stop loss.
+    const limit = await broker.placeOrder({ symbol: 'DEMO:XAU', side: Side.Buy, type: OrderType.Limit, qty: 1, limitPrice: 1995, stopPrice: 2000.05 });
+    assert.equal(recorded.orders.find(order => order.id === limit.orderId).status, OrderStatus.Working);
+    const stop = await broker.placeOrder({ symbol: 'DEMO:XAU', side: Side.Buy, type: OrderType.Stop, qty: 1, stopPrice: 2010, limitPrice: 1990, stopLoss: 2000 });
+    assert.equal(recorded.orders.find(order => order.id === stop.orderId).status, OrderStatus.Working, 'the stop loss is checked against the stop price');
+    await assert.rejects(broker.placeOrder({ symbol: 'DEMO:XAU', side: Side.Buy, type: OrderType.Limit, qty: 1, limitPrice: 1995.05 }), /instrument tick/);
+    await assert.rejects(broker.placeOrder({ symbol: 'DEMO:XAU', side: Side.Buy, type: OrderType.Stop, qty: 1, limitPrice: 1995 }), /order price is required/);
+  } finally {
+    paperBroker.dispose();
+  }
+});
+
 test('the default schedule coalesces account updates on a timer', t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let flushes = 0;

@@ -2,7 +2,7 @@ import type { TradingChartBinding, TradingCollectionPort } from "../contracts/po
 import type { TradingSession } from "../core/session.js";
 import type { TicketController } from "./order-ticket/controller.js";
 import type { createDomWorkspace } from "./dom/workspace.js";
-import { ticketPhaseOpen } from "./ticket-dock.js";
+import { isPositionPaneEntry, ticketPhaseOpen } from "./ticket-dock.js";
 
 /** Broker panel requests settle back to the mounted state if the surface cannot open. */
 export function bindPanelVisibility(
@@ -27,6 +27,11 @@ export function bindPanelVisibility(
   };
   const ticketOpen = () => ticketPhaseOpen(ticket.state.get().phase);
   const orderPanelChanged = (visible: boolean) => {
+    const entry = session.dialogs.current.get();
+    if (isPositionPaneEntry(entry)) {
+      if (!visible && entry) session.dialogs.respond(entry.id, false);
+      return;
+    }
     if (!visible && ticketOpen()) ticket.close();
     if (!visible || ticketOpen()) return;
     const chart = activeChart();

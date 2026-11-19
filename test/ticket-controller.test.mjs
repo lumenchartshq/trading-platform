@@ -420,3 +420,43 @@ test("O01/U04: the ticket says the order reached the broker once it is acknowled
   f.controller.destroy();
   f.session.destroy();
 });
+
+test("U04: after a confirmed modification the ticket can start a fresh new order", async () => {
+  const f = await fixture();
+  try {
+    await f.session.host.setOrderTicketSetting('showOrderPreview', false);
+    await f.controller.review();
+    const order = f.simulation.controls.snapshot().orders.find(order => order.type === 1);
+    await f.controller.open({ id: 'chart', generation: 1, symbol: 'SIM:X' }, order);
+    f.controller.patch({ limitPrice: 99 });
+    await f.controller.review();
+    assert.equal(f.controller.state.get().phase, 'confirmed');
+    assert.ok('id' in f.controller.state.get().order);
+    f.controller.startNext(); await flush(); await flush();
+    const next = f.controller.state.get();
+    assert.equal(next.phase, 'editing');
+    assert.equal('id' in next.order, false, 'a new order, not the modified one');
+    assert.equal(next.order.symbol, 'SIM:X');
+    assert.equal(next.order.limitPrice, undefined);
+  } finally { f.controller.destroy(); f.session.destroy(); }
+});
+
+test("O03/U04: an unresolved result can start the next order; one still being checked cannot", async () => {
+  const f = await fixture((broker) => { broker.placeOrder = () => new Promise(() => {}); });
+  try {
+    await f.controller.review();
+    const send = f.controller.send(); await flush();
+    f.simulation.clock.advance(10000); await send;
+    assert.equal(f.controller.state.get().checking, true);
+    f.controller.startNext();
+    assert.equal(f.controller.state.get().phase, 'unconfirmed', 'no new order while the result is still being checked');
+    for (let second = 0; second < 61; second++) { f.simulation.clock.advance(1000); await flush(); }
+    assert.equal(f.controller.state.get().checking, false);
+    f.controller.startNext();
+    const next = f.controller.state.get();
+    assert.equal(next.phase, 'editing');
+    assert.equal(next.order.type, 1);
+    assert.equal(next.order.qty, 2);
+    assert.deepEqual(next.context, f.session.commands.context(), 'the next order is sent with the current account context');
+  } finally { f.controller.destroy(); f.session.destroy(); }
+});

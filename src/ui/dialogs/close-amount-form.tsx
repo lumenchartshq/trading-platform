@@ -40,7 +40,7 @@ export function CloseAmountForm(props: {
       }}
     >
       <p class="trading-dialog-lines">
-        <span>{props.request.position.symbol}</span>
+        <span>{props.request.instrument.brokerSymbol || props.request.position.symbol}</span>
         <span>Open quantity {props.request.position.qty}</span>
       </p>
       <NumberField

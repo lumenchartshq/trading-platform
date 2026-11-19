@@ -132,7 +132,7 @@ export function TicketProtectionWorkspace(
           </Show>
         </header>
         <p class="trading-muted">
-          <strong>{symbolLabel(props.symbol, props.session.features)}</strong>
+          <strong>{symbolLabel(props.symbol, props.session.features, props.instrument.brokerSymbol)}</strong>
           <br />
           {props.orderDescription ??
             `${props.quantity} ${props.instrument.units ?? "units"}`}

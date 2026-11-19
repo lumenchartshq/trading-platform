@@ -1,5 +1,5 @@
 import { userMessage } from "../../core/errors.js";
-import { ticketEditable } from "./rules.js";
+import { ticketCanStartNext, ticketEditable } from "./rules.js";
 import { ticketShowsPreview, ticketSkipsReview } from "../../core/review-policy.js";
 import {
   defaultDuration,
@@ -444,13 +444,18 @@ export function createTicketController(session: TradingSession) {
     }
   }
   /**
-   * After a confirmed new order, start the next draft as the reference terminal does: keep side, type, quantity,
-   * duration and custom fields; reset the entry price to the current quote; clear all protection.
+   * Once the ticket settles (see `ticketCanStartNext`), start the next draft. After a new order, as the reference
+   * terminal does: keep side, type, quantity, duration and custom fields; reset the entry price to the current quote;
+   * clear all protection. After a modification there is no new-order draft to keep, so a fresh one opens, as from Trade.
    */
   function startNext(): void {
     const current = state.get();
-    if (disposed || current.phase !== "confirmed" || "id" in current.order)
+    if (disposed || !ticketCanStartNext(current)) return;
+    stopFollowing();
+    if ("id" in current.order) {
+      if (current.binding) void open(current.binding).catch(() => undefined);
       return;
+    }
     const quote = session.state.quotes.get(current.order.symbol);
     const entry =
       current.order.side === Side.Buy ? quote?.ask : quote?.bid;
@@ -458,6 +463,8 @@ export function createTicketController(session: TradingSession) {
     sequence++;
     state.set({
       ...current,
+      // A fresh context: the account may have changed since this draft was sent (an unconfirmed send after a resync).
+      context: session.commands.context(),
       phase: "editing",
       preview: undefined,
       previewToken: undefined,

@@ -823,6 +823,35 @@ test("U09: a broker write to orderPanelVisibility or domPanelVisibility that can
   } finally { f.destroy(); }
 });
 
+test("U09: position protection reports the order panel open without opening a new order ticket", async () => {
+  const f = await mounted();
+  try {
+    const visibility = f.session.host.orderPanelVisibility();
+    const changes = [];
+    visibility.subscribe(value => changes.push(value));
+    const position = f.session.state.positions.get(f.session.state.positions.ids()[0]);
+    const result = f.session.host.showPositionBracketsDialog(position, {});
+    await flush(4);
+    assert.equal(f.session.dialogs.current.get()?.request.kind, "position");
+    assert.equal(visibility.value(), true, "a mobile host must reveal the chart for position protection too");
+    assert.deepEqual(changes, [true]);
+    visibility.setValue(false);
+    assert.equal(await result, false, "closing the order panel dismisses position protection");
+    await flush(4);
+    assert.equal(f.session.dialogs.current.get(), undefined, "no spurious new-order request is queued");
+    assert.deepEqual(changes, [true, false]);
+    await openTicket(f);
+    f.session.dialogs.respond(f.session.dialogs.current.get().id, true);
+    await flush();
+    changes.length = 0;
+    const next = f.session.host.showPositionBracketsDialog(position, {});
+    await flush();
+    assert.deepEqual(changes, [true], "a new protection pane reveals the chart even if a ticket was already open");
+    f.session.dialogs.respond(f.session.dialogs.current.get().id, false);
+    assert.equal(await next, false);
+  } finally { f.destroy(); }
+});
+
 test("U01/U03: supportSymbolSearch never chooses a previous query's result: typing clears results and Enter searches the current text", async () => {
   const clock = new ManualClock();
   const f = await mounted({

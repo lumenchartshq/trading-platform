@@ -23,6 +23,7 @@ import type { EntityChange } from "../../core/entity-store.js";
 import { ticketEditable } from "./rules.js";
 import { projectTicketOverlays, type TicketLineTarget } from "../../chart/ticket-projection.js";
 import { normalizeOverlayEvent } from "../../chart/overlay-events.js";
+import { positionProfitCurrency } from "../../core/position-profit-currency.js";
 
 type Controller = TicketController;
 /** The ticket is the canonical unsent order; chart lines are transient views, never broker rows. */
@@ -58,13 +59,6 @@ export function createTicketProjection(
     finance = undefined;
     previous?.release?.();
   }
-  const currencies = new Map<string, string>();
-  function updateCurrencies() {
-    currencies.clear();
-    for (const account of session.accounts?.get() ?? [])
-      if (account.currency) currencies.set(account.id, account.currency);
-  }
-  updateCurrencies();
   let applying = false;
   function restoreDraft(original: Readonly<PreOrder>) {
     // Explicit undefined clears fields introduced by the gesture.
@@ -275,8 +269,13 @@ export function createTicketProjection(
           exit,
           display,
           pipValues: session.state.pipValues.get(state.order.symbol),
-          inInstrumentCurrency: flags.positionPLInInstrumentCurrency,
-          accountCurrency: currencies.get(state.context?.accountId ?? ""),
+          // The ticket's own account owns the position it would open.
+          currency: positionProfitCurrency(state.order, {
+            symbolPolicy: session.symbolPolicy,
+            instrument: state.instrument,
+            accounts: session.accounts?.get(),
+            accountId: state.context?.accountId,
+          }),
         }),
     });
     const spec = projection.entry;
@@ -337,10 +336,7 @@ export function createTicketProjection(
   scope.own(session.policy.subscribe(sync));
   if (session.accounts)
     scope.own(
-      session.accounts.subscribe(() => {
-        updateCurrencies();
-        sync();
-      }),
+      session.accounts.subscribe(() => sync()),
     );
   scope.own(session.displaySettings.subscribe(sync));
   scope.own(session.state.pipValues.subscribeChanges(financialChange));

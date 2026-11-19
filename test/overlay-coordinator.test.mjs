@@ -568,6 +568,36 @@ test('P01/U01: positionPLInInstrumentCurrency labels chart money in the instrume
   assert.doesNotMatch(labels.false, /USD/, labels.false);
 });
 
+test('showPositionProfitCurrency names the account currency on the position line, and keeps the bare amount when it is off or unknown', async () => {
+  // `withCurrency: false` reports the account without a currency.
+  const label = async ({ show, withCurrency = true }) => {
+    const base = createDeterministicBroker().brokerConfig;
+    const f = fixture({
+      showPositionProfitCurrency: show,
+      brokerConfig: { ...base, configFlags: { ...base.configFlags, supportPLUpdate: false } },
+      formatters: { numeric: async () => ({ format: (value) => value.toFixed(2) }) },
+      configureBroker(broker) {
+        const accounts = broker.accountsMetainfo;
+        broker.accountsMetainfo = async () => (await accounts()).map(({ currency, ...account }) => (withCurrency ? { ...account, currency } : account));
+      },
+    });
+    let coordinator;
+    try {
+      await f.session.ready; const chart = f.chart(`unit-${show}-${withCurrency}`);
+      coordinator = createOverlayCoordinator(f.session, f.collection, () => {}); await flush(); await flush();
+      f.simulation.controls.quote('SIM:X', 101); for (let i = 0; i < 6; i++) await flush();
+      const overlay = chart.overlays.find((value) => value.spec.kind === 'position');
+      return [overlay.spec, ...overlay.updates].map((value) => value.label).filter(Boolean).at(-1);
+    } finally { coordinator?.destroy(); f.session.destroy(); }
+  };
+  const off = await label({ show: undefined });
+  const on = await label({ show: true });
+  const unknown = await label({ show: true, withCurrency: false });
+  assert.match(off, /^Long \d+ · [+-]?[\d.,]+$/, off);
+  assert.match(on, /^Long \d+ · [+-]?[\d.,]+ USD$/, on);
+  assert.match(unknown, /^Long \d+ · [+-]?[\d.,]+$/, unknown);
+});
+
 test('U05/X01: chartContextMenuActions that never answers falls back to the platform Buy/Sell items after one second, and malformed entries are skipped', async () => {
   let mode = 'hang';
   const clock = new ManualClock();
@@ -784,6 +814,31 @@ test('B06: exits of a waiting market order draw as TP/SL pills measured from the
   assert.equal(tp.spec.protection?.preview.leg, 'takeProfit');
   assert.equal(tp.spec.protection?.phase, 'inactive', 'a broker-accepted exit waiting on its parent stays dashed');
   releaseQuotes(); coordinator.destroy(); f.session.destroy();
+});
+
+test('privacy mode masks exit-line money without touching the saved display settings', async () => {
+  let hidden = true;
+  const listeners = new Set();
+  const privacyMode = { get: () => hidden, subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); } };
+  const f = fixture({ privacyMode }); await f.session.ready;
+  const releaseQuotes = f.session.acquireQuotes('SIM:X', 'fast', () => {}); await flush(); await flush();
+  const display = f.session.displaySettings.get();
+  const parent = { id: 'market-parent', symbol: 'SIM:X', side: Side.Buy, qty: 2, type: OrderType.Market, status: OrderStatus.Working };
+  f.session.host.orderUpdate(parent);
+  f.session.host.orderUpdate({ ...linkedOrder('market-tp', parent.id, ParentType.Order), limitPrice: 102, status: OrderStatus.Inactive });
+  const chart = f.chart('A');
+  const coordinator = createOverlayCoordinator(f.session, f.collection, () => {});
+  await flush();
+  const tp = chart.overlays.find(value => value.spec.entityId === 'market-tp' && !value.removed);
+  const text = () => (tp.updates.at(-1)?.protection ?? tp.spec.protection)?.preview.text;
+  assert.equal(text(), '***');
+  hidden = false;
+  for (const listener of listeners) listener(false);
+  await flush();
+  assert.notEqual(text(), '***');
+  assert.deepEqual(f.session.displaySettings.get(), display, 'privacy is not a display setting');
+  releaseQuotes(); coordinator.destroy(); f.session.destroy();
+  assert.equal(listeners.size, 0, 'the session releases the host value');
 });
 
 test('B06: a position whose TP/SL arrive only as child orders offers no handle for those legs', async () => {

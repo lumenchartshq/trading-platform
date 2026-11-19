@@ -137,12 +137,23 @@ export type TradingSurfaceKind = 'ticket' | 'accounts' | 'dom' | 'dialogs' | 'ch
 /** Lumen host geometry, expressed in the presentation environment's CSS pixels. */
 export interface TradingFloatingBounds { readonly x: number; readonly y: number; readonly width: number; readonly height: number; }
 export type TradingTicketPlacement = { readonly mode: 'docked' } | { readonly mode: 'floating'; readonly bounds: TradingFloatingBounds };
+/** The docks a presentation sizes for the platform. */
+export type TradingDockKind = 'ticket' | 'accounts' | 'dom';
+/**
+ * Who sizes a dock: `platform` (the default) draws resize handles and may show the side pane as a compact overlay;
+ * `host` lays the dock out itself, so the platform draws no handle and never makes the side pane compact; `fixed` is a
+ * host box the panel cannot change, so the Account Manager also stays in its normal mode and offers no mode controls.
+ */
+export type TradingDockSizing = 'platform' | 'host' | 'fixed';
 export interface TradingPresentationPort {
   readonly environment: ReadonlyValue<TradingEnvironment>;
   readonly settings: TradingSettingsPort;
   acquireSurface(kind: TradingSurfaceKind, chart?: TradingChartBinding): { readonly element: HTMLElement; readonly visible?: ReadonlyValue<boolean>; release: Dispose };
-  setDockSize(kind: 'ticket' | 'accounts' | 'dom', pixels: number, options?: { readonly maximized?: boolean }): void;
-  dockBounds?(kind: 'ticket' | 'accounts' | 'dom', options?: { readonly maximized?: boolean }): Readonly<{ min: number; max: number }>;
+  /** The space a dock wants. `collapsed` and `maximized` describe the Account Manager's mode; a host that owns a dock's size forwards them. */
+  setDockSize(kind: TradingDockKind, pixels: number, options?: { readonly maximized?: boolean; readonly collapsed?: boolean }): void;
+  dockBounds?(kind: TradingDockKind, options?: { readonly maximized?: boolean }): Readonly<{ min: number; max: number }>;
+  /** Optional: who sizes this dock. Absent means `platform`. */
+  dockSizing?(kind: TradingDockKind): TradingDockSizing;
   /** Optional host extension; moving the owned ticket surface must preserve its mounted state. */
   setTicketPlacement?(placement: TradingTicketPlacement): void;
   notifyLayoutChanged(): void;
@@ -226,6 +237,17 @@ export interface TradingSessionOptions {
   clock?: TradingClock; extensions?: LumenBrokerExtensions; settingsKey?: string; requireConfirmation?: boolean;
   /** Lumen extension: the execution sound; defaults to a Web Audio tone where available. */
   sound?: TradingSoundPort;
+  /**
+   * Lumen extension: the host's privacy mode. While true, money the platform estimates for chart lines (exit lines,
+   * estimated position profit) shows a mask. It never changes or saves the user's display settings.
+   */
+  privacyMode?: ReadonlyValue<boolean>;
+  /**
+   * Lumen extension: whether the position line also names the currency of money P&L in the account currency. Off
+   * (the default, as in the reference terminal) shows the bare amount. Instrument-currency P&L
+   * (`positionPLInInstrumentCurrency`) names its currency either way, and no unit shows while the currency is unknown.
+   */
+  showPositionProfitCurrency?: boolean;
   /** Pinned `debug_broker` widget option: log Broker API and Trading Host calls with matching IDs. */
   debugBroker?: 'all' | 'normal' | 'host-only' | 'broker-only';
   /** Destination for debug logs; defaults to `console.debug`. */
@@ -276,7 +298,7 @@ export interface BrokerRejection {
   readonly details?: Record<string, unknown>;
 }
 /** Lumen-only widget/mount overrides; no changes to the pinned broker interface. */
-export type TradingSessionOverrides = Partial<Pick<TradingSessionOptions, 'clock' | 'extensions' | 'marketData' | 'marketDataCapabilities' | 'formatters' | 'settingsKey' | 'displaySettings' | 'sound'>>;
+export type TradingSessionOverrides = Partial<Pick<TradingSessionOptions, 'clock' | 'extensions' | 'marketData' | 'marketDataCapabilities' | 'formatters' | 'settingsKey' | 'displaySettings' | 'sound' | 'privacyMode' | 'showPositionProfitCurrency'>>;
 export interface TradingRuntime { readonly ready: Promise<void>; destroy(): void; }
 export interface NativeTradingOptions { readonly abi: 1; readonly buildId: string; readonly session: Omit<TradingSessionOptions, 'marketData' | 'formatters'> & { readonly marketData?: TradingMarketDataPort; readonly formatters?: TradingFormatterPort }; readonly datafeed?: Partial<IDatafeedQuotesApi> & Pick<IDatafeedChartApi, 'subscribeDepth' | 'unsubscribeDepth'>; /** Host overrides remain readable while the optional asset is loading: `get` returns every override so far, listeners receive each applied patch. */
 readonly displayOverrides?: ReadonlyValue<Partial<TradingDisplaySettings>>;

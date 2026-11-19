@@ -15,6 +15,7 @@ import type { OverlayEntityKind, Projection } from "./overlay-projection.js";
 import type { Overlay, OverlayAction, Owner } from "./overlay-types.js";
 import type { createParentLinks } from "./parent-links.js";
 import { reviewLineLocked, type ReviewLock } from "./review-lock.js";
+import type { ProfitAccount } from "../core/position-profit-currency.js";
 
 /** What a chart gesture needs from its coordinator; everything is passed explicitly, there is no event bus. */
 export interface GestureHost {
@@ -29,9 +30,9 @@ export interface GestureHost {
     qty: number,
     entry: number | undefined,
     exit: number,
-    currency?: string,
+    account: ProfitAccount,
   ) => string;
-  readonly currentAccountCurrency: () => string | undefined;
+  readonly currentProfitAccount: () => ProfitAccount;
   readonly lockFor: (owner: Owner, projection: Projection) => ReviewLock | undefined;
   readonly shownProtection: (
     owner: Owner,
@@ -85,7 +86,7 @@ export function createOverlayGestures(host: GestureHost) {
           qty,
           entry,
           exit,
-          overlay.moneyCurrency ?? host.currentAccountCurrency(),
+          overlay.moneyAccount ?? host.currentProfitAccount(),
         ),
     });
     if (!protection) return;
@@ -194,7 +195,7 @@ export function createOverlayGestures(host: GestureHost) {
             return;
           }
         }
-        overlay.moneyCurrency = host.currentAccountCurrency();
+        overlay.moneyAccount = host.currentProfitAccount();
         overlay.editToken = host.session.chartEdits.state.get()?.token;
         overlay.gestureRevision = overlay.projection.revision;
         overlay.gestureId = event.gestureId;
